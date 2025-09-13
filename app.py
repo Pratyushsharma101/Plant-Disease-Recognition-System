@@ -5,7 +5,7 @@ import uuid
 import tensorflow as tf
 
 app = Flask(__name__)
-model = tf.keras.models.load_model("models/plant_disease_recog_model_pwp.keras")
+model = tf.keras.models.load_model("models/plant_disease_classification_model.keras")
 label = ['Apple___Apple_scab',
  'Apple___Black_rot',
  'Apple___Cedar_apple_rust',
@@ -65,12 +65,30 @@ def extract_features(image):
     feature = np.array([feature])
     return feature
 
-def model_predict(image):
-    img = extract_features(image)
-    prediction = model.predict(img)
-    # print(prediction)
+from tensorflow.keras.preprocessing import image
+import numpy as np
+
+def model_predict(img_path):
+    # Load the image and resize to 224x224
+    img = image.load_img(img_path, target_size=(224, 224))  
+
+    # Convert to array
+    img_array = image.img_to_array(img)
+
+    # Add batch dimension
+    img_array = np.expand_dims(img_array, axis=0)  
+
+    # Normalize if your model expects normalized input
+    img_array /= 255.0  
+
+    # Make prediction
+    prediction = model.predict(img_array)
+
+    # Get predicted label
     prediction_label = plant_disease[prediction.argmax()]
+
     return prediction_label
+
 
 @app.route('/upload/',methods = ['POST','GET'])
 def uploadimage():

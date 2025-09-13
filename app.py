@@ -1,50 +1,11 @@
-from flask import Flask, render_template, request, redirect, send_from_directory, url_for
+from flask import Flask, render_template,request,redirect,send_from_directory,url_for
 import numpy as np
 import json
 import uuid
 import tensorflow as tf
-import requests
-import os
-from tensorflow.keras.preprocessing import image
 
 app = Flask(__name__)
-
-# Google Drive direct download link
-MODEL_URL = "https://drive.google.com/uc?export=download&id=1WvWNOOGxHHjorlUBmjf2AlyVtTSSF84m"
-MODEL_PATH = "models/plant_disease_classification_model.keras"
-
-# Download model if it doesn't exist
-def download_model():
-    if not os.path.exists(MODEL_PATH):
-        os.makedirs("models", exist_ok=True)
-        print("Downloading model from Google Drive...")
-        response = requests.get(MODEL_URL, stream=True)
-        
-        # Handle Google Drive virus scan warning for large files
-        if 'content-disposition' not in response.headers:
-            # This might be the virus scan warning page, try to get the actual download link
-            for key, value in response.cookies.items():
-                if key.startswith('download_warning'):
-                    confirm_url = f"{MODEL_URL}&confirm={value}"
-                    response = requests.get(confirm_url, stream=True)
-                    break
-        
-        with open(MODEL_PATH, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-        print("Model downloaded successfully!")
-    
-    return tf.keras.models.load_model(MODEL_PATH)
-
-# Load model
-try:
-    model = tf.keras.models.load_model(MODEL_PATH)
-    print("Model loaded from local storage")
-except:
-    print("Local model not found, downloading...")
-    model = download_model()
-
+model = tf.keras.models.load_model("models/plant_disease_classification_model.keras")
 label = ['Apple___Apple_scab',
  'Apple___Black_rot',
  'Apple___Cedar_apple_rust',
@@ -88,6 +49,8 @@ label = ['Apple___Apple_scab',
 with open("plant_disease.json",'r') as file:
     plant_disease = json.load(file)
 
+# print(plant_disease[4])
+
 @app.route('/uploadimages/<path:filename>')
 def uploaded_images(filename):
     return send_from_directory('./uploadimages', filename)
@@ -96,11 +59,14 @@ def uploaded_images(filename):
 def home():
     return render_template('home.html')
 
-def extract_features(image_path):
-    image = tf.keras.utils.load_img(image_path, target_size=(160,160))
+def extract_features(image):
+    image = tf.keras.utils.load_img(image,target_size=(160,160))
     feature = tf.keras.utils.img_to_array(image)
     feature = np.array([feature])
     return feature
+
+from tensorflow.keras.preprocessing import image
+import numpy as np
 
 def model_predict(img_path):
     # Load the image and resize to 224x224
@@ -123,29 +89,20 @@ def model_predict(img_path):
 
     return prediction_label
 
+
 @app.route('/upload/',methods = ['POST','GET'])
 def uploadimage():
     if request.method == "POST":
-        image_file = request.files['img']
-        if image_file:
-            # Create upload directory if it doesn't exist
-            os.makedirs("uploadimages", exist_ok=True)
-            
-            # Generate unique filename
-            filename = f"temp_{uuid.uuid4().hex}_{image_file.filename}"
-            filepath = f"uploadimages/{filename}"
-            
-            # Save the file
-            image_file.save(filepath)
-            
-            # Make prediction
-            try:
-                prediction = model_predict(filepath)
-                return render_template('home.html', result=True, imagepath=f'/uploadimages/{filename}', prediction=prediction)
-            except Exception as e:
-                return render_template('home.html', error=f"Prediction error: {str(e)}")
+        image = request.files['img']
+        temp_name = f"uploadimages/temp_{uuid.uuid4().hex}"
+        image.save(f'{temp_name}_{image.filename}')
+        print(f'{temp_name}_{image.filename}')
+        prediction = model_predict(f'./{temp_name}_{image.filename}')
+        return render_template('home.html',result=True,imagepath = f'/{temp_name}_{image.filename}', prediction = prediction )
     
-    return redirect('/')
-
+    else:
+        return redirect('/')
+        
+    
 if __name__ == "__main__":
     app.run(debug=True)
